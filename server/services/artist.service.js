@@ -1,4 +1,6 @@
 const db = require('../config/db.config');
+const driveService = require('./drive.service');
+const visionService = require('./vision.service');
 
 class ArtistService {
   async findMatchingArtists(style, imageAnalysis) {
@@ -11,9 +13,8 @@ class ArtistService {
 
       // 2. עבור כל אמן, נחפש עבודות דומות
       const artistsWithWorks = await Promise.all(artists.map(async (artist) => {
-        // רק אם יש לאמן תיקייה בדרייב
         if (artist.google_drive_folder_id) {
-          const similarWorks = await this.findSimilarWorks(
+          const similarWorks = await driveService.searchSimilarImages(
             artist.google_drive_folder_id,
             imageAnalysis
           );
@@ -32,35 +33,7 @@ class ArtistService {
 
   async findSimilarWorks(folderId, imageAnalysis) {
     try {
-      // קבלת כל התמונות מהתיקייה
-      const folderContents = await driveService.getFolderContents(folderId);
-      
-      if (!folderContents || folderContents.length === 0) {
-        return [];
-      }
-
-      // ניתוח והשוואה של כל תמונה
-      const similarityResults = await Promise.all(
-        folderContents.map(async (file) => {
-          if (file.mimeType.startsWith('image/')) {
-            const analysis = await visionService.analyzeImage(file.id);
-            const similarity = this.calculateSimilarity(imageAnalysis, analysis);
-            return {
-              fileId: file.id,
-              webViewLink: file.webViewLink,
-              similarity
-            };
-          }
-          return null;
-        })
-      );
-
-      // סינון תוצאות null ומיון לפי דמיון
-      return similarityResults
-        .filter(result => result !== null)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 5);
-
+      return await driveService.searchSimilarImages(folderId, imageAnalysis);
     } catch (error) {
       console.error('Error finding similar works:', error);
       return [];

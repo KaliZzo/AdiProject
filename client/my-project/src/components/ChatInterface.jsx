@@ -39,9 +39,24 @@ const ChatInterface = () => {
             type: 'assistant',
             content: `This appears to be a ${data.styleAnalysis.style} style tattoo.`,
             analysis: data.styleAnalysis,
-            artists: data.matchingArtists
+            visionAnalysis: data.visionAnalysis,
+            artists: data.artists,
+            imageUrl: data.imageUrl
           }
         ];
+
+        await fetch('http://localhost:5000/api/chat/message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userMessage: 'Analyzing this tattoo...',
+            assistantResponse: `This appears to be a ${data.styleAnalysis.style} style tattoo.`,
+            imageUrl: data.imageUrl,
+            analyzedStyle: [data.styleAnalysis.style]
+          })
+        });
 
         setMessages(prev => [...prev, ...newMessages]);
       }

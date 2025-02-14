@@ -1,16 +1,22 @@
 const { google } = require('googleapis');
 const path = require('path');
-const visionService = require('./vision.service');
 const vision = require('@google-cloud/vision');
+const stream = require('stream');
 
 class DriveService {
   constructor() {
-    this.drive = google.drive({
-      version: 'v3',
-      auth: new google.auth.GoogleAuth({
-        keyFile: './config/gd-api-adi-c944e165a8e7.json',
-        scopes: ['https://www.googleapis.com/auth/drive']
-      })
+    const auth = new google.auth.GoogleAuth({
+      keyFilename: './config/gd-api-adi-c944e165a8e7.json',
+      scopes: [
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive.readonly'
+      ]
+    });
+
+    this.drive = google.drive({ version: 'v3', auth });
+    this.visionClient = new vision.ImageAnnotatorClient({
+      keyFilename: './config/gd-api-adi-c944e165a8e7.json'
     });
   }
 
@@ -33,42 +39,30 @@ class DriveService {
     }
   }
 
-  async uploadImage(buffer, filename, folderId = null) {
+  async uploadImage(buffer, filename) {
     try {
-      const fileMetadata = {
-        name: filename,
-        mimeType: 'image/jpeg'
-      };
-
-      if (folderId) {
-        fileMetadata.parents = [folderId];
-      }
-
-      const stream = require('stream');
+      // יצירת stream מה-buffer
       const bufferStream = new stream.PassThrough();
       bufferStream.end(buffer);
 
-      const response = await this.drive.files.create({
-        requestBody: fileMetadata,
-        media: {
-          mimeType: 'image/jpeg',
-          body: bufferStream
-        },
-        fields: 'id,webViewLink'
-      });
-
-      await this.drive.permissions.create({
-        fileId: response.data.id,
-        requestBody: {
-          role: 'reader',
-          type: 'anyone'
-        }
-      });
-
-      return {
-        fileId: response.data.id,
-        webViewLink: response.data.webViewLink
+      const fileMetadata = {
+        name: filename,
+        parents: ['1pDs2a6RhGzmSJkQ4_MUWVvV-ZEVd-GpW']
       };
+
+      const media = {
+        mimeType: 'image/jpeg',
+        body: bufferStream // שימוש ב-stream במקום ב-buffer ישירות
+      };
+
+      const file = await this.drive.files.create({
+        resource: fileMetadata,
+        media: media,
+        fields: 'id, webViewLink'
+      });
+
+      console.log('File uploaded successfully:', file.data);
+      return file.data;
     } catch (error) {
       console.error('Error uploading to Drive:', error);
       throw error;
@@ -125,30 +119,20 @@ class DriveService {
 
   async searchSimilarImages(folderId, analysis) {
     try {
-      console.log('Starting search with analysis:', JSON.stringify(analysis, null, 2));
-      
-      // 1. קבלת כל התמונות מהתיקייה
       const files = await this.getFolderContents(folderId);
-      console.log('Found files:', files.length);
+      console.log(`Found ${files.length} files in folder`);
 
-      // 2. ניתוח והשוואה של כל תמונה
       const similarityResults = await Promise.all(
         files.map(async (file) => {
           try {
-            if (file.mimeType.startsWith('image/')) {
-              // ניתוח התמונה עם Vision API
-              const imageAnalysis = await visionService.analyzeImage(file.id);
-              console.log('Image analysis for file:', file.id, imageAnalysis);
-
-              // חישוב דמיון
-              const similarity = this.calculateImageSimilarity(analysis, imageAnalysis);
-              return {
-                fileId: file.id,
-                webViewLink: file.webViewLink,
-                similarity
-              };
-            }
-            return null;
+            const imageUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
+            return {
+              fileId: file.id,
+              name: file.name,
+              webViewLink: imageUrl,
+              thumbnailLink: `https://drive.google.com/thumbnail?id=${file.id}`,
+              similarity: 1 // פשוט לצורך הדגמה
+            };
           } catch (error) {
             console.error(`Error processing file ${file.id}:`, error);
             return null;
@@ -156,15 +140,12 @@ class DriveService {
         })
       );
 
-      // 3. סינון ומיון התוצאות
       const validResults = similarityResults
         .filter(result => result !== null)
-        .sort((a, b) => b.similarity - a.similarity)
         .slice(0, 5);
 
-      console.log('Final results:', validResults);
+      console.log('Returning similar images:', validResults);
       return validResults;
-
     } catch (error) {
       console.error('Error searching similar images:', error);
       throw error;
@@ -181,8 +162,13 @@ class DriveService {
       let score = 0;
 
       // בדיקת תקינות הנתונים
-      if (!original?.imageContent?.detectedLabels || !comparison?.detectedLabels) {
-        console.warn('Missing required data for similarity calculation');
+      if (!comparison?.detectedLabels || comparison.detectedLabels.length === 0) {
+        console.warn('No labels detected in comparison image');
+        return 0;
+      }
+
+      if (!original?.imageContent?.detectedLabels || original.imageContent.detectedLabels.length === 0) {
+        console.warn('No labels detected in original image');
         return 0;
       }
 
@@ -191,22 +177,12 @@ class DriveService {
         original.imageContent.detectedLabels.map(l => l.name.toLowerCase())
       );
       const comparisonLabels = new Set(
-        comparison.detectedLabels.map(l => l.name.toLowerCase())
+        comparison.detectedLabels.map(l => l.description.toLowerCase())
       );
 
       // חישוב חפיפה
       const intersection = [...originalLabels].filter(x => comparisonLabels.has(x));
       score += intersection.length * 2;
-
-      // השוואת צבעים אם קיימים
-      if (original.technicalAnalysis?.colors?.dominantColors && 
-          comparison.technicalAnalysis?.colors?.dominantColors) {
-        const colorSimilarity = this.compareColors(
-          original.technicalAnalysis.colors.dominantColors,
-          comparison.technicalAnalysis.colors.dominantColors
-        );
-        score += colorSimilarity;
-      }
 
       return score;
     } catch (error) {
@@ -241,12 +217,12 @@ class DriveService {
   async getFolderContents(folderId) {
     try {
       const response = await this.drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields: 'files(id, name, mimeType, webViewLink)',
+        q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+        fields: 'files(id, name, mimeType)',
+        pageSize: 50
       });
 
-      console.log('API Response:', response.data);
-      return response.data.files || [];
+      return response.data.files;
     } catch (error) {
       console.error('Error getting folder contents:', error);
       throw error;

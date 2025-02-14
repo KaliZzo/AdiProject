@@ -21,14 +21,14 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'No image provided'
+        message: 'No image file provided'
       });
     }
 
-    // שמירת התמונה בדרייב
-    const driveResult = await driveService.uploadImage(
+    // העלאה לדרייב
+    const uploadedFile = await driveService.uploadImage(
       req.file.buffer,
-      `tattoo-${Date.now()}.jpg`
+      req.file.originalname
     );
 
     // ניתוח התמונה
@@ -54,7 +54,7 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
 
     res.json({
       success: true,
-      imageUrl: driveResult.webViewLink,
+      imageUrl: uploadedFile.webViewLink,
       visionAnalysis,
       styleAnalysis,
       artists: artists.map(artist => ({
