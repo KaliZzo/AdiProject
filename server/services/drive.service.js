@@ -117,39 +117,119 @@ class DriveService {
     }
   }
 
-  async searchSimilarImages(folderId, analysis) {
+  async searchSimilarImages(folderId, originalAnalysis) {
     try {
-      const files = await this.getFolderContents(folderId);
-      console.log(`Found ${files.length} files in folder`);
+      console.log('🔍 Starting similar images search in folder:', folderId);
 
+      // 1. קבלת כל התמונות מהתיקייה
+      const files = await this.getFolderContents(folderId);
+      console.log(`📁 Found ${files.length} files in folder`);
+
+      // 2. ניתוח והשוואת כל תמונה
       const similarityResults = await Promise.all(
         files.map(async (file) => {
           try {
-            const imageUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
+            // קבלת התמונה מהדרייב
+            const response = await this.drive.files.get({
+              fileId: file.id,
+              alt: 'media'
+            }, { responseType: 'arraybuffer' });
+
+            // ניתוח התמונה
+            const analysis = await this.visionClient.annotateImage({
+              image: { content: Buffer.from(response.data).toString('base64') },
+              features: [
+                { type: 'LABEL_DETECTION', maxResults: 10 },
+                { type: 'IMAGE_PROPERTIES' }
+              ]
+            });
+
+            // חישוב דמיון תגיות
+            const labelSimilarity = this.calculateLabelSimilarity(
+              originalAnalysis.imageContent.detectedLabels,
+              analysis[0].labelAnnotations || []
+            );
+
+            // חישוב דמיון צבעים
+            const colorSimilarity = this.calculateColorSimilarity(
+              originalAnalysis.technicalAnalysis.colors.dominantColors,
+              analysis[0].imagePropertiesAnnotation?.dominantColors?.colors || []
+            );
+
+            // חישוב ציון דמיון משוקלל
+            const totalSimilarity = (labelSimilarity * 0.7) + (colorSimilarity * 0.3);
+
             return {
               fileId: file.id,
               name: file.name,
-              webViewLink: imageUrl,
+              webViewLink: `https://drive.google.com/file/d/${file.id}/view`,
               thumbnailLink: `https://drive.google.com/thumbnail?id=${file.id}`,
-              similarity: 1 // פשוט לצורך הדגמה
+              similarity: totalSimilarity,
+              scores: {
+                labelSimilarity,
+                colorSimilarity
+              }
             };
           } catch (error) {
-            console.error(`Error processing file ${file.id}:`, error);
+            console.error(`Error processing file ${file.name}:`, error);
             return null;
           }
         })
       );
 
+      // 3. סינון תוצאות לא תקינות ומיון לפי דמיון
       const validResults = similarityResults
-        .filter(result => result !== null)
+        .filter(result => result !== null && result.similarity > 0.1) // סינון תוצאות עם דמיון נמוך מדי
+        .sort((a, b) => b.similarity - a.similarity)
         .slice(0, 5);
 
-      console.log('Returning similar images:', validResults);
       return validResults;
+
     } catch (error) {
       console.error('Error searching similar images:', error);
       throw error;
     }
+  }
+
+  calculateLabelSimilarity(originalLabels, comparisonLabels) {
+    if (!originalLabels?.length || !comparisonLabels?.length) return 0;
+
+    const originalSet = new Set(originalLabels.map(l => l.description.toLowerCase()));
+    const comparisonSet = new Set(comparisonLabels.map(l => l.description.toLowerCase()));
+
+    const intersection = [...originalSet].filter(x => comparisonSet.has(x));
+    const union = new Set([...originalSet, ...comparisonSet]);
+
+    return intersection.length / union.size; // Jaccard similarity
+  }
+
+  calculateColorSimilarity(originalColors, comparisonColors) {
+    if (!originalColors?.length || !comparisonColors?.length) return 0;
+
+    let totalSimilarity = 0;
+    let comparisons = 0;
+
+    // השוואת הצבעים הדומיננטיים ביותר (עד 3)
+    const topOriginalColors = originalColors.slice(0, 3);
+    const topComparisonColors = comparisonColors.slice(0, 3);
+
+    topOriginalColors.forEach(origColor => {
+      topComparisonColors.forEach(compColor => {
+        // חישוב מרחק RGB מנורמל
+        const distance = Math.sqrt(
+          Math.pow(origColor.color.red - compColor.color.red, 2) +
+          Math.pow(origColor.color.green - compColor.color.green, 2) +
+          Math.pow(origColor.color.blue - compColor.color.blue, 2)
+        );
+
+        // נרמול התוצאה ל-0 עד 1
+        const similarity = 1 - (distance / 441.67); // sqrt(255^2 + 255^2 + 255^2)
+        totalSimilarity += similarity * origColor.score * compColor.score; // משקלל לפי חשיבות הצבע
+        comparisons++;
+      });
+    });
+
+    return comparisons > 0 ? totalSimilarity / comparisons : 0;
   }
 
   calculateImageSimilarity(original, comparison) {

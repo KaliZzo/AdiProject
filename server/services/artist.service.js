@@ -5,24 +5,30 @@ const visionService = require('./vision.service');
 class ArtistService {
   async findMatchingArtists(style, imageAnalysis) {
     try {
-      // 1. מציאת אמנים שמתאימים לסגנון
+      console.log('🔍 Finding artists for style:', style);
+      console.log('📊 Image Analysis:', JSON.stringify(imageAnalysis, null, 2));
+
       const { rows: artists } = await db.query(
         'SELECT * FROM artists WHERE $1 = ANY(styles)',
         [style]
       );
+      console.log(`👥 Found ${artists.length} matching artists`);
 
-      // 2. עבור כל אמן, נחפש עבודות דומות
+      console.log('🖼️ Searching for similar works in artists portfolios...');
       const artistsWithWorks = await Promise.all(artists.map(async (artist) => {
+        console.log(`📁 Processing portfolio for artist: ${artist.name}`);
         if (artist.google_drive_folder_id) {
           const similarWorks = await driveService.searchSimilarImages(
             artist.google_drive_folder_id,
             imageAnalysis
           );
+          console.log(`✅ Found ${similarWorks.length} similar works for ${artist.name}`);
           return { ...artist, similarWorks };
         }
         return { ...artist, similarWorks: [] };
       }));
 
+      console.log('🎯 Final results:', JSON.stringify(artistsWithWorks, null, 2));
       return artistsWithWorks;
 
     } catch (error) {

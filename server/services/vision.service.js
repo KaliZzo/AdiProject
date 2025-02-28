@@ -17,17 +17,11 @@ class VisionService {
     });
   }
 
-  async analyzeImage(fileId) {
+  async analyzeImage(imageBuffer) {
     try {
-      // קבלת התמונה מהדרייב
-      const response = await this.drive.files.get({
-        fileId: fileId,
-        alt: 'media'
-      }, { responseType: 'arraybuffer' });
-
-      // ניתוח התמונה
+      // ניתוח התמונה ישירות מה-buffer
       const [result] = await this.client.annotateImage({
-        image: { content: Buffer.from(response.data).toString('base64') },
+        image: { content: imageBuffer.toString('base64') },
         features: [
           { type: 'LABEL_DETECTION', maxResults: 10 },
           { type: 'IMAGE_PROPERTIES' },
@@ -37,11 +31,16 @@ class VisionService {
 
       console.log('Vision API result:', JSON.stringify(result, null, 2));
 
+      // וידוא שיש לנו את כל המידע הנדרש
+      if (!result.labelAnnotations || !result.imagePropertiesAnnotation?.dominantColors?.colors) {
+        throw new Error('Missing required image analysis data');
+      }
+
       return {
-        detectedLabels: result.labelAnnotations || [],
+        detectedLabels: result.labelAnnotations,
         technicalAnalysis: {
           colors: {
-            dominantColors: result.imagePropertiesAnnotation?.dominantColors?.colors || []
+            dominantColors: result.imagePropertiesAnnotation.dominantColors.colors
           }
         }
       };

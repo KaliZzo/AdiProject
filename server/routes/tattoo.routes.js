@@ -25,19 +25,11 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       });
     }
 
-    // העלאה לדרייב
-    const uploadedFile = await driveService.uploadImage(
-      req.file.buffer,
-      req.file.originalname
-    );
-
-    // ניתוח התמונה
+    // ניתוח התמונה ישירות מהבאפר
     const visionAnalysis = await imageAnalysisService.analyzeImage(req.file.buffer);
-    console.log('Vision Analysis:', visionAnalysis); // לוג לדיבוג
-
-    // וידוא שיש תוצאות לפני המשך העיבוד
-    if (!visionAnalysis || !visionAnalysis.imageContent || !visionAnalysis.imageContent.detectedLabels) {
-      throw new Error('Invalid vision analysis result');
+    
+    if (!visionAnalysis) {
+      throw new Error('Failed to analyze image');
     }
 
     // ניתוח סגנון הקעקוע
@@ -54,22 +46,13 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
 
     res.json({
       success: true,
-      imageUrl: uploadedFile.webViewLink,
       visionAnalysis,
       styleAnalysis,
-      artists: artists.map(artist => ({
-        ...artist,
-        similarWorks: artist.similarWorks.map(work => ({
-          ...work,
-          imageUrl: work.google_drive_file_id 
-            ? `https://drive.google.com/file/d/${work.google_drive_file_id}/view`
-            : work.image_url
-        }))
-      }))
+      artists
     });
 
   } catch (error) {
-    console.error('Error in /analyze route:', error);
+    console.error('Error in /analyze:', error);
     res.status(500).json({
       success: false,
       message: 'Error analyzing image',

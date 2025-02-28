@@ -9,6 +9,8 @@ class ImageAnalysisService {
 
   async analyzeImage(imageBuffer) {
     try {
+      console.log('🔍 Starting image analysis with Vision API...');
+      
       const [result] = await this.client.annotateImage({
         image: { content: imageBuffer },
         features: [
@@ -18,7 +20,11 @@ class ImageAnalysisService {
         ]
       });
 
-      return {
+      console.log('🏷️ Detected Labels:', JSON.stringify(result.labelAnnotations, null, 2));
+      console.log('🎯 Detected Objects:', JSON.stringify(result.localizedObjectAnnotations, null, 2));
+      console.log('🎨 Color Analysis:', JSON.stringify(result.imagePropertiesAnnotation?.dominantColors?.colors, null, 2));
+
+      const analysis = {
         imageContent: {
           detectedLabels: result.labelAnnotations || [],
           detectedObjects: result.localizedObjectAnnotations || []
@@ -29,6 +35,9 @@ class ImageAnalysisService {
           }
         }
       };
+
+      console.log('✅ Analysis complete:', JSON.stringify(analysis, null, 2));
+      return analysis;
     } catch (error) {
       console.error('Error analyzing image:', error);
       throw error;

@@ -72,19 +72,36 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)]">
-      <div className="flex-1 overflow-y-auto space-y-6 mb-4 p-6 rounded-2xl bg-apple-light dark:bg-[#2c2c2e] transition-colors duration-200">
-        {messages.map((message, index) => (
-          <Message key={index} message={message} />
-        ))}
-        {isLoading && (
-          <div className="flex justify-center">
-            <div className="w-7 h-7 border-3 border-apple-blue border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-        <div ref={endOfMessagesRef} />
+    <div className="flex flex-col h-full">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4">
+          {messages.map((message, index) => (
+            <div key={index} className={`py-6 ${
+              message.type === 'assistant' ? 'bg-zinc-900' : ''
+            }`}>
+              <div className="max-w-3xl mx-auto">
+                <Message message={message} />
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="py-6 bg-zinc-900">
+              <div className="max-w-3xl mx-auto flex justify-center">
+                <div className="w-7 h-7 border-3 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            </div>
+          )}
+          <div ref={endOfMessagesRef} />
+        </div>
       </div>
-      <ImageUpload onUpload={handleImageUpload} isLoading={isLoading} />
+
+      {/* Input Area */}
+      <div className="border-t border-gray-800 bg-black">
+        <div className="max-w-3xl mx-auto p-4">
+          <ImageUpload onUpload={handleImageUpload} isLoading={isLoading} />
+        </div>
+      </div>
     </div>
   );
 };
