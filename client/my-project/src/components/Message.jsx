@@ -96,7 +96,14 @@ const Message = ({ message }) => {
                     className="cursor-pointer"
                     onClick={() => handleArtistClick(artist, message.visionAnalysis)}
                   >
-                    <p className="font-medium text-lg mb-1">{artist.name}</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-medium text-lg">{artist.name}</p>
+                      {artist.isPreferred && (
+                        <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                          Preferred Artist
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                       Styles: {artist.styles.join(', ')}
                     </p>
