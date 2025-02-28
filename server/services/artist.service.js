@@ -1,6 +1,7 @@
 const db = require('../config/db.config');
 const driveService = require('./drive.service');
 const visionService = require('./vision.service');
+const preferenceService = require('./preference.service');
 
 class ArtistService {
   async findMatchingArtists(style, imageAnalysis) {
@@ -23,13 +24,35 @@ class ArtistService {
             imageAnalysis
           );
           console.log(`✅ Found ${similarWorks.length} similar works for ${artist.name}`);
-          return { ...artist, similarWorks };
+          
+          // Check if artist is preferred
+          const isPreferred = await preferenceService.isArtistPreferred(artist.id);
+          
+          return { 
+            ...artist, 
+            similarWorks,
+            isPreferred 
+          };
         }
-        return { ...artist, similarWorks: [] };
+        return { 
+          ...artist, 
+          similarWorks: [],
+          isPreferred: false 
+        };
       }));
 
-      console.log('🎯 Final results:', JSON.stringify(artistsWithWorks, null, 2));
-      return artistsWithWorks;
+      // Sort artists: preferred first, then by other criteria
+      const sortedArtists = artistsWithWorks.sort((a, b) => {
+        // First sort by preference
+        if (a.isPreferred && !b.isPreferred) return -1;
+        if (!a.isPreferred && b.isPreferred) return 1;
+        
+        // If both have same preference status, sort by number of similar works
+        return (b.similarWorks?.length || 0) - (a.similarWorks?.length || 0);
+      });
+
+      console.log('🎯 Final results:', JSON.stringify(sortedArtists, null, 2));
+      return sortedArtists;
 
     } catch (error) {
       console.error('Error finding matching artists:', error);

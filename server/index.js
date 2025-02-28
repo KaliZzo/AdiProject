@@ -15,12 +15,14 @@ const tattooRoutes = require('./routes/tattoo.routes');
 const artistRoutes = require('./routes/artist.routes');
 const chatRoutes = require('./routes/chat.routes');
 const testRoutes = require('./routes/test.routes');
+const preferenceRoutes = require('./routes/preference.routes');
 
 // Route middlewares
 app.use('/api/tattoo', tattooRoutes);
 app.use('/api/artists', artistRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/preferences', preferenceRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

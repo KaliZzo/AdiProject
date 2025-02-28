@@ -35,4 +35,15 @@ CREATE TABLE IF NOT EXISTS artist_availability (
     date DATE NOT NULL,
     time_slots jsonb NOT NULL, -- מערך של slots פנויים
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- New table for artist preferences
+CREATE TABLE IF NOT EXISTS artist_preferences (
+    id SERIAL PRIMARY KEY,
+    artist_id INTEGER REFERENCES artists(id),
+    is_preferred BOOLEAN DEFAULT TRUE,
+    priority_start_time TIME,
+    priority_end_time TIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ); 

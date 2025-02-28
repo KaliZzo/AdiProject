@@ -38,6 +38,12 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       visionAnalysis
     );
 
+    // Upload image to get a URL
+    const imageUrl = await driveService.uploadImage(
+      req.file.buffer,
+      `tattoo_${Date.now()}.jpg`
+    );
+
     // מציאת אמנים מתאימים
     const artists = await artistService.findMatchingArtists(
       styleAnalysis.style,
@@ -48,7 +54,8 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       success: true,
       visionAnalysis,
       styleAnalysis,
-      artists
+      artists,
+      imageUrl
     });
 
   } catch (error) {

@@ -2,26 +2,45 @@ const { google } = require('googleapis');
 const path = require('path');
 const vision = require('@google-cloud/vision');
 const stream = require('stream');
+const fs = require('fs');
 
 class DriveService {
   constructor() {
-    const auth = new google.auth.GoogleAuth({
-      keyFilename: './config/gd-api-adi-c944e165a8e7.json',
-      scopes: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/drive.readonly'
-      ]
-    });
+    try {
+      const credentialsPath = './config/gd-api-adi-c944e165a8e7.json';
+      
+      // Check if credentials file exists
+      if (fs.existsSync(credentialsPath)) {
+        const auth = new google.auth.GoogleAuth({
+          keyFilename: credentialsPath,
+          scopes: [
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive.readonly'
+          ]
+        });
 
-    this.drive = google.drive({ version: 'v3', auth });
-    this.visionClient = new vision.ImageAnnotatorClient({
-      keyFilename: './config/gd-api-adi-c944e165a8e7.json'
-    });
+        this.drive = google.drive({ version: 'v3', auth });
+        this.visionClient = new vision.ImageAnnotatorClient({
+          keyFilename: credentialsPath
+        });
+        this.useMock = false;
+      } else {
+        console.warn('Google Cloud credentials file not found. Using mock data for drive service.');
+        this.useMock = true;
+      }
+    } catch (error) {
+      console.warn('Error initializing Drive service:', error);
+      this.useMock = true;
+    }
   }
 
   async createArtistFolder(artistName) {
     try {
+      if (this.useMock) {
+        return `mock-folder-${Date.now()}`;
+      }
+      
       const folderMetadata = {
         name: `Portfolio-${artistName}`, 
         mimeType: 'application/vnd.google-apps.folder'
@@ -35,12 +54,24 @@ class DriveService {
       return folder.data.id;
     } catch (error) {
       console.error('Error creating artist folder:', error);
+      if (this.useMock) {
+        return `mock-folder-${Date.now()}`;
+      }
       throw error;
     }
   }
 
   async uploadImage(buffer, filename) {
     try {
+      if (this.useMock) {
+        const mockFileId = `mock-file-${Date.now()}`;
+        return {
+          id: mockFileId,
+          webViewLink: `https://example.com/mock-image/${mockFileId}`,
+          thumbnailLink: `https://example.com/mock-thumbnail/${mockFileId}`
+        };
+      }
+      
       // יצירת stream מה-buffer
       const bufferStream = new stream.PassThrough();
       bufferStream.end(buffer);
@@ -65,6 +96,14 @@ class DriveService {
       return file.data;
     } catch (error) {
       console.error('Error uploading to Drive:', error);
+      if (this.useMock) {
+        const mockFileId = `mock-file-${Date.now()}`;
+        return {
+          id: mockFileId,
+          webViewLink: `https://example.com/mock-image/${mockFileId}`,
+          thumbnailLink: `https://example.com/mock-thumbnail/${mockFileId}`
+        };
+      }
       throw error;
     }
   }
